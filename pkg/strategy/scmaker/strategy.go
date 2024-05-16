@@ -224,13 +224,13 @@ func (s *Strategy) placeAdjustmentOrders(ctx context.Context) {
 		}
 
 		adjOrders = append(adjOrders, types.SubmitOrder{
-			Symbol:      s.Symbol,
-			Type:        types.OrderTypeLimitMaker,
-			Side:        types.SideTypeBuy,
-			Price:       price,
-			Quantity:    bidQuantity,
-			Market:      s.Market,
-			TimeInForce: types.TimeInForceGTC,
+			Symbol:   s.Symbol,
+			Type:     types.OrderTypeLimitMaker,
+			Side:     types.SideTypeBuy,
+			Price:    price,
+			Quantity: bidQuantity,
+			Market:   s.Market,
+			//TimeInForce: types.TimeInForceGTC,
 		})
 	} else if s.Position.IsLong() {
 		price := profitProtectedPrice(types.SideTypeSell, s.Position.AverageCost, ticker.Buy.Add(tickSize), s.Session.MakerFeeRate, s.MinProfit)
@@ -241,13 +241,13 @@ func (s *Strategy) placeAdjustmentOrders(ctx context.Context) {
 		}
 
 		adjOrders = append(adjOrders, types.SubmitOrder{
-			Symbol:      s.Symbol,
-			Type:        types.OrderTypeLimitMaker,
-			Side:        types.SideTypeSell,
-			Price:       price,
-			Quantity:    askQuantity,
-			Market:      s.Market,
-			TimeInForce: types.TimeInForceGTC,
+			Symbol:   s.Symbol,
+			Type:     types.OrderTypeLimitMaker,
+			Side:     types.SideTypeSell,
+			Price:    price,
+			Quantity: askQuantity,
+			Market:   s.Market,
+			//TimeInForce: types.TimeInForceGTC,
 		})
 	}
 
