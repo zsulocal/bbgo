@@ -1,82 +1,45 @@
 package ichimoku
 
 import (
+	"context"
+	"fmt"
 	"github.com/c9s/bbgo/pkg/bbgo"
 	"github.com/c9s/bbgo/pkg/types"
-	"log"
+	"github.com/sirupsen/logrus"
 )
 
-type IchimokuCloudStrategy struct {
+const ID = "ichimoku_cloud"
+
+var log = logrus.WithField("strategy", ID)
+
+type Strategy struct {
+	//	*common.Strategy
+	*bbgo.Notifiability
+	Environment       *bbgo.Environment
 	Market            types.Market
+	Symbol            string         `json:"symbol"`
+	Interval          types.Interval `json:"interval"`
 	ConversionPeriod  int
 	BasePeriod        int
 	LaggingSpanPeriod int
 	Displacement      int
-	Risk              float64
+	klines            []types.KLine
 }
 
-func NewIchimokuCloudStrategy() *IchimokuCloudStrategy {
-	return &IchimokuCloudStrategy{
-		ConversionPeriod:  9,
-		BasePeriod:        26,
-		LaggingSpanPeriod: 52,
-		Displacement:      26,
-		Risk:              0.02,
-	}
+func (s *Strategy) Subscribe(session *bbgo.ExchangeSession) {
+	session.Subscribe(types.KLineChannel, s.Symbol, types.SubscribeOptions{Interval: s.Interval})
 }
 
-func (s *IchimokuCloudStrategy) ID() string {
-	return "ichimoku_cloud"
+func (s *Strategy) ID() string {
+	return ID
 }
 
-func (s *IchimokuCloudStrategy) OnCandle(candle types.Candle) {
-	candles := s.Market.KLineStore.Candles
-	tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan := s.CalculateIchimokuCloud(candles)
-
-	price := candle.Close
-	cloudTop := max(senkouSpanA[len(senkouSpanA)-s.Displacement], senkouSpanB[len(senkouSpanB)-s.Displacement])
-	cloudBottom := min(senkouSpanA[len(senkouSpanA)-s.Displacement], senkouSpanB[len(senkouSpanB)-s.Displacement])
-
-	if tenkanSen[len(tenkanSen)-1] > kijunSen[len(kijunSen)-1] && price > cloudTop && chikouSpan[len(chikouSpan)-s.Displacement] > price {
-		s.buySignal(candle)
-	} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom && chikouSpan[len(chikouSpan)-s.Displacement] < price {
-		s.sellSignal(candle)
-	}
+func (s *Strategy) InstanceID() string {
+	return fmt.Sprintf("%s:%s:%s", ID, s.Symbol, s.Interval)
 }
 
-func (s *IchimokuCloudStrategy) buySignal(candle types.Candle) {
-	balance, err := s.Market.GetBalance()
-	if err != nil {
-		log.Println("Error getting balance:", err)
-		return
-	}
-	riskAmount := balance[s.Market.QuoteCurrency].Available * s.Risk
-	orderSize := riskAmount / candle.Close
-	s.Market.OrderExecutor.SubmitOrder(types.SubmitOrder{
-		Symbol:   s.Market.Symbol,
-		Side:     types.SideTypeBuy,
-		Type:     types.OrderTypeMarket,
-		Quantity: orderSize,
-	})
-	log.Printf("Buy order placed for %f units at %f", orderSize, candle.Close)
-}
-
-func (s *IchimokuCloudStrategy) sellSignal(candle types.Candle) {
-	position, err := s.Market.GetPosition()
-	if err != nil {
-		log.Println("Error getting position:", err)
-		return
-	}
-	s.Market.OrderExecutor.SubmitOrder(types.SubmitOrder{
-		Symbol:   s.Market.Symbol,
-		Side:     types.SideTypeSell,
-		Type:     types.OrderTypeMarket,
-		Quantity: position[s.Market.BaseCurrency].Quantity,
-	})
-	log.Printf("Sell order placed for %f units at %f", position[s.Market.BaseCurrency].Quantity, candle.Close)
-}
-
-func (s *IchimokuCloudStrategy) CalculateIchimokuCloud(candles []types.Candle) (tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan []float64) {
+func (s *Strategy) calculateIchimokuCloud() (tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan []float64) {
+	candles := s.klines
 	length := len(candles)
 	tenkanSen = make([]float64, length)
 	kijunSen = make([]float64, length)
@@ -98,31 +61,59 @@ func (s *IchimokuCloudStrategy) CalculateIchimokuCloud(candles []types.Candle) (
 			senkouSpanB[i] = (highestHigh(candles[i-s.LaggingSpanPeriod+1:i+1]) + lowestLow(candles[i-s.LaggingSpanPeriod+1:i+1])) / 2
 		}
 		if i >= s.Displacement {
-			chikouSpan[i-s.Displacement] = candles[i].Close
+			chikouSpan[i-s.Displacement] = candles[i].Close.Float64()
 		}
 	}
 
 	return tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan
 }
 
-func highestHigh(candles []types.Candle) float64 {
+func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, session *bbgo.ExchangeSession) error {
+	//s.Strategy.Initialize(ctx, s.Environment, session, s.Market, ID, s.InstanceID())
+	log.Info("start")
+
+	kLineStore, _ := session.MarketDataStore(s.Symbol)
+
+	if klines, ok := kLineStore.KLinesOfInterval(s.Interval); ok {
+		s.klines = (*klines)[0:]
+	}
+
+	fmt.Println(s.klines)
+
+	session.MarketDataStream.OnKLineClosed(func(k types.KLine) {
+
+		tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan := s.calculateIchimokuCloud()
+		price := k.Close.Float64()
+		cloudTop := max(senkouSpanA[len(senkouSpanA)-s.Displacement], senkouSpanB[len(senkouSpanB)-s.Displacement])
+		cloudBottom := min(senkouSpanA[len(senkouSpanA)-s.Displacement], senkouSpanB[len(senkouSpanB)-s.Displacement])
+
+		if tenkanSen[len(tenkanSen)-1] > kijunSen[len(kijunSen)-1] && price > cloudTop && chikouSpan[len(chikouSpan)-s.Displacement] > price {
+			log.Info("buy")
+		} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom && chikouSpan[len(chikouSpan)-s.Displacement] < price {
+			log.Info("sell")
+		}
+	})
+	return nil
+}
+
+func highestHigh(candles []types.KLine) float64 {
 	high := candles[0].High
 	for _, candle := range candles {
-		if candle.High > high {
+		if candle.High.Compare(high) > 0 {
 			high = candle.High
 		}
 	}
-	return high
+	return high.Float64()
 }
 
-func lowestLow(candles []types.Candle) float64 {
+func lowestLow(candles []types.KLine) float64 {
 	low := candles[0].Low
 	for _, candle := range candles {
-		if candle.Low < low {
+		if candle.Low.Compare(low) < 0 {
 			low = candle.Low
 		}
 	}
-	return low
+	return low.Float64()
 }
 
 func max(a, b float64) float64 {
@@ -137,4 +128,8 @@ func min(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+func init() {
+	bbgo.RegisterStrategy(ID, &Strategy{})
 }
