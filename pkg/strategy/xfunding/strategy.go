@@ -321,45 +321,6 @@ func (s *Strategy) CrossRun(
 		s.State = newState()
 	}
 
-	if s.ProfitFixerConfig != nil {
-		log.Infof("profitFixer is enabled, start fixing with config: %+v", s.ProfitFixerConfig)
-
-		s.SpotPosition = types.NewPositionFromMarket(s.spotMarket)
-		s.FuturesPosition = types.NewPositionFromMarket(s.futuresMarket)
-		s.ProfitStats.ProfitStats = types.NewProfitStats(s.Market)
-
-		since := s.ProfitFixerConfig.TradesSince.Time()
-		now := time.Now()
-
-		spotFixer := common.NewProfitFixer()
-		if ss, ok := s.spotSession.Exchange.(types.ExchangeTradeHistoryService); ok {
-			spotFixer.AddExchange(s.spotSession.Name, ss)
-		}
-
-		if err2 := spotFixer.Fix(ctx, s.Symbol,
-			since, now,
-			s.ProfitStats.ProfitStats,
-			s.SpotPosition); err2 != nil {
-			return err2
-		}
-
-		futuresFixer := common.NewProfitFixer()
-		if ss, ok := s.futuresSession.Exchange.(types.ExchangeTradeHistoryService); ok {
-			futuresFixer.AddExchange(s.futuresSession.Name, ss)
-		}
-
-		if err2 := futuresFixer.Fix(ctx, s.Symbol,
-			since, now,
-			s.ProfitStats.ProfitStats,
-			s.FuturesPosition); err2 != nil {
-			return err2
-		}
-
-		bbgo.Notify("Fixed spot position", s.SpotPosition)
-		bbgo.Notify("Fixed futures position", s.FuturesPosition)
-		bbgo.Notify("Fixed profit stats", s.ProfitStats.ProfitStats)
-	}
-
 	if err := s.syncPositionRisks(ctx); err != nil {
 		return err
 	}
@@ -412,15 +373,19 @@ func (s *Strategy) CrossRun(
 
 	case PositionOpening:
 		// transfer all base assets from the spot account into the spot account
+		/*
 		if err := s.transferIn(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, fixedpoint.Zero); err != nil {
 			log.WithError(err).Errorf("futures asset transfer in error")
 		}
+		*/
 
 	case PositionClosing, PositionClosed:
 		// transfer all base assets from the futures account back to the spot account
+		/*
 		if err := s.transferOut(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, fixedpoint.Zero); err != nil {
 			log.WithError(err).Errorf("futures asset transfer out error")
 		}
+		*/
 
 	}
 
@@ -436,6 +401,9 @@ func (s *Strategy) CrossRun(
 			return
 		}
 
+		log.Info("A new spot trade", trade, profit)
+
+
 		switch s.State.PositionState {
 		case PositionOpening:
 			if trade.Side != types.SideTypeBuy {
@@ -449,12 +417,14 @@ func (s *Strategy) CrossRun(
 
 			// if we have trade, try to query the balance and transfer the balance to the futures wallet account
 			// TODO: handle missing trades here. If the process crashed during the transfer, how to recover?
+			/*
 			if err := backoff.RetryGeneral(ctx, func() error {
 				return s.transferIn(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, trade.Quantity)
 			}); err != nil {
 				log.WithError(err).Errorf("spot-to-futures transfer in retry failed")
 				return
 			}
+			*/
 
 		case PositionClosing:
 			if trade.Side != types.SideTypeSell {
@@ -471,9 +441,13 @@ func (s *Strategy) CrossRun(
 			return
 		}
 
+		log.Info("A future new trade", trade, profit)
+
+
 		switch s.getPositionState() {
 		case PositionClosing:
 			// de-leverage and get the collateral base quantity for transfer
+			/*
 			quantity := trade.Quantity.Div(s.Leverage)
 
 			if err := backoff.RetryGeneral(ctx, func() error {
@@ -482,6 +456,7 @@ func (s *Strategy) CrossRun(
 				log.WithError(err).Errorf("spot-to-futures transfer in retry failed")
 				return
 			}
+			*/
 
 		}
 	})
@@ -713,7 +688,8 @@ func (s *Strategy) reduceFuturesPosition(ctx context.Context) {
 	if !s.spotMarket.IsDustQuantity(spotBase, s.SpotPosition.AverageCost) {
 		if balance, ok := s.futuresSession.Account.Balance(s.futuresMarket.BaseCurrency); ok && balance.Available.Sign() > 0 {
 			if err := backoff.RetryGeneral(ctx, func() error {
-				return s.transferOut(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, balance.Available)
+				//return s.transferOut(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, balance.Available)
+				return nil
 			}); err != nil {
 				log.WithError(err).Errorf("spot-to-futures transfer in retry failed")
 			}
@@ -816,9 +792,12 @@ func (s *Strategy) syncFuturesPosition(ctx context.Context) {
 	}
 
 	// max futures base position (without negative sign)
+	/*
 	maxFuturesBasePosition := fixedpoint.Min(
 		spotBase.Mul(s.Leverage),
 		s.State.TotalBaseTransfer.Mul(s.Leverage))
+	*/
+	maxFuturesBasePosition := spotBase
 
 	if maxFuturesBasePosition.IsZero() {
 		return
@@ -826,6 +805,7 @@ func (s *Strategy) syncFuturesPosition(ctx context.Context) {
 
 	// if - futures position < max futures position, increase it
 	// posDiff := futuresBase.Abs().Sub(maxFuturesBasePosition)
+	/*
 	if futuresBase.Abs().Compare(maxFuturesBasePosition) >= 0 {
 		s.setPositionState(PositionReady)
 
@@ -838,6 +818,7 @@ func (s *Strategy) syncFuturesPosition(ctx context.Context) {
 		// s.startClosingPosition()
 		return
 	}
+	*/
 
 	orderPrice := ticker.Sell
 	diffQuantity := maxFuturesBasePosition.Sub(futuresBase.Neg())
@@ -862,6 +843,7 @@ func (s *Strategy) syncFuturesPosition(ctx context.Context) {
 		Symbol:   s.Symbol,
 		Side:     types.SideTypeSell,
 		Type:     types.OrderTypeLimitMaker,
+		//Type:     types.OrderTypeLimit,
 		Quantity: orderQuantity,
 		Price:    orderPrice,
 		Market:   s.futuresMarket,
@@ -897,6 +879,7 @@ func (s *Strategy) syncSpotPosition(ctx context.Context) {
 	if spotBase.Sign() < 0 {
 		return
 	}
+	log.Info("dddd")
 
 	log.Infof("syncSpotPosition: spot/futures positions: %s (spot) <=> %s (futures)", spotBase.String(), futuresBase.String())
 
@@ -973,6 +956,7 @@ func (s *Strategy) syncSpotPosition(ctx context.Context) {
 }
 
 func (s *Strategy) increaseSpotPosition(ctx context.Context) {
+	log.Info("increase spot position", s.positionType)
 	if s.positionType != types.PositionShort {
 		log.Errorf("funding long position type is not supported")
 		return
@@ -987,6 +971,8 @@ func (s *Strategy) increaseSpotPosition(ctx context.Context) {
 	s.mu.Unlock()
 
 	if usedQuoteInvestment.Compare(s.QuoteInvestment) >= 0 {
+		s.setPositionState(PositionReady)
+
 		// stop increase the stop position
 		return
 	}
@@ -1045,6 +1031,7 @@ func (s *Strategy) detectPremiumIndex(premiumIndex *types.PremiumIndex) bool {
 	switch s.getPositionState() {
 
 	case PositionClosed:
+		log.Infof("%s %s", fundingRate.Percentage(), s.ShortFundingRate.High.Percentage())
 		if fundingRate.Compare(s.ShortFundingRate.High) < 0 {
 			return false
 		}
@@ -1146,9 +1133,11 @@ func (s *Strategy) allocateOrderExecutor(
 	orderExecutor.BindEnvironment(s.Environment)
 	orderExecutor.Bind()
 	orderExecutor.TradeCollector().OnPositionUpdate(func(position *types.Position) {
+		log.Info("position update #####")
 		bbgo.Sync(ctx, s)
 	})
 	orderExecutor.TradeCollector().OnTrade(func(trade types.Trade, _ fixedpoint.Value, _ fixedpoint.Value) {
+		log.Info("stats update #####")
 		s.ProfitStats.AddTrade(trade)
 
 		if profit, netProfit, madeProfit := s.NeutralPosition.AddTrade(trade); madeProfit {

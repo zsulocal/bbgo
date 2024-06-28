@@ -802,7 +802,7 @@ func (e *Exchange) QueryClosedOrders(
 		return nil, err
 	}
 
-	log.Infof("querying closed orders %s from %s <=> %s ...", symbol, since, until)
+	log.Infof("querying %s %v closed orders %s from %s <=> %s ...", e.Name(), e.IsFutures, symbol, since, until)
 
 	if e.IsMargin {
 		req := e.client.NewListMarginOrdersService().Symbol(symbol)

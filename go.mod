@@ -9,7 +9,7 @@ toolchain go1.21.6
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Masterminds/squirrel v1.5.3
-	github.com/adshao/go-binance/v2 v2.5.0
+	github.com/adshao/go-binance/v2 v2.5.1
 	github.com/c-bata/goptuna v0.8.1
 	github.com/c9s/requestgen v1.3.6
 	github.com/c9s/rockhopper/v2 v2.0.4

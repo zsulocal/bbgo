@@ -30,9 +30,11 @@ func (e *Exchange) queryFuturesClosedOrders(
 	}
 
 	binanceOrders, err := req.Do(ctx)
+	fmt.Println(since, until, symbol, len(binanceOrders), err)
 	if err != nil {
 		return orders, err
 	}
+	log.Infof("query order len %d", len(binanceOrders))
 	return toGlobalFuturesOrders(binanceOrders, false)
 }
 

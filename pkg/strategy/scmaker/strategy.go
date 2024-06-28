@@ -228,7 +228,7 @@ func (s *Strategy) placeAdjustmentOrders(ctx context.Context) {
 			Price:       price,
 			Quantity:    bidQuantity,
 			Market:      s.Market,
-			TimeInForce: types.TimeInForceGTC,
+			//TimeInForce: types.TimeInForceGTC,
 		})
 	} else if s.Position.IsLong() {
 		price := profitProtectedPrice(types.SideTypeSell, s.Position.AverageCost, ticker.Buy.Add(tickSize), s.Session.MakerFeeRate, s.MinProfit)
@@ -245,7 +245,7 @@ func (s *Strategy) placeAdjustmentOrders(ctx context.Context) {
 			Price:       price,
 			Quantity:    askQuantity,
 			Market:      s.Market,
-			TimeInForce: types.TimeInForceGTC,
+			//TimeInForce: types.TimeInForceGTC,
 		})
 	}
 
@@ -384,14 +384,17 @@ func (s *Strategy) placeLiquidityOrders(ctx context.Context) {
 
 	askX := availableBase.Float64() / askSum
 	bidX := availableQuote.Float64() / (bidSum * (fixedpoint.Sum(bidPrices).Float64()))
+	log.Infof("askx %v bidX %v", askX, bidX)
 
 	askX = math.Trunc(askX*1e8) / 1e8
 	bidX = math.Trunc(bidX*1e8) / 1e8
+	log.Infof("askx %v bidX %v", askX, bidX)
 
 	var liqOrders []types.SubmitOrder
 	for i := 0; i <= s.NumOfLiquidityLayers; i++ {
 		bidQuantity := fixedpoint.NewFromFloat(s.liquidityScale.Call(float64(i)) * bidX)
 		askQuantity := fixedpoint.NewFromFloat(s.liquidityScale.Call(float64(i)) * askX)
+	        log.Infof("askquan %v bidquan %v", askQuantity, bidQuantity)
 		bidPrice := bidPrices[i]
 		askPrice := askPrices[i]
 
@@ -429,7 +432,7 @@ func (s *Strategy) placeLiquidityOrders(ctx context.Context) {
 				Quantity:    bidQuantity,
 				Price:       bidPrice,
 				Market:      s.Market,
-				TimeInForce: types.TimeInForceGTC,
+				//TimeInForce: types.TimeInForceGTC,
 			})
 		}
 
@@ -441,7 +444,7 @@ func (s *Strategy) placeLiquidityOrders(ctx context.Context) {
 				Quantity:    askQuantity,
 				Price:       askPrice,
 				Market:      s.Market,
-				TimeInForce: types.TimeInForceGTC,
+				//TimeInForce: types.TimeInForceGTC,
 			})
 		}
 	}

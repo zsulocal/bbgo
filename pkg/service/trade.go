@@ -105,11 +105,23 @@ func (s *TradeService) Sync(ctx context.Context, exchange types.Exchange, symbol
 		},
 	}
 
-	for _, sel := range tasks {
-		if err := sel.execute(ctx, s.DB, startTime); err != nil {
-			return err
-		}
-	}
+    now := time.Now()
+    for _, sel := range tasks {
+        var endTime time.Time
+        for startTime.Before(now) {
+            if now.Sub(startTime) < 7*time.Hour*24 {
+                endTime = now
+            } else {
+                endTime = startTime.Add(7 * time.Hour * 24)
+            }
+            if err := sel.execute(ctx, s.DB, startTime, endTime); err != nil {
+                return err
+            }
+            startTime = endTime
+        }
+    }
+
+
 
 	return nil
 }

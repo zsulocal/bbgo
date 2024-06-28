@@ -80,6 +80,7 @@ func (c *TradeCollector) BindStreamForBackground(stream types.Stream) {
 
 func (c *TradeCollector) BindStream(stream types.Stream) {
 	stream.OnTradeUpdate(func(trade types.Trade) {
+		logrus.Info("trade update ", trade)
 		c.processTrade(trade)
 	})
 }
@@ -133,6 +134,8 @@ func (c *TradeCollector) RecoverTrade(td types.Trade) bool {
 // profit will also be calculated.
 func (c *TradeCollector) Process() bool {
 	positionChanged := false
+
+	logrus.Debug("trade collector callback")
 
 	var trades []types.Trade
 
