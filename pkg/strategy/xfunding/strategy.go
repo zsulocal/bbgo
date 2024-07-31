@@ -138,6 +138,8 @@ type Strategy struct {
 	// Reset your position info
 	Reset bool `json:"reset"`
 
+	Spread fixedpoint.Value `json:"spread"`
+
 	ProfitFixerConfig *common.ProfitFixerConfig `json:"profitFixer"`
 
 	// CloseFuturesPosition can be enabled to close the futures position and then transfer the collateral asset back to the spot account.
@@ -374,17 +376,17 @@ func (s *Strategy) CrossRun(
 	case PositionOpening:
 		// transfer all base assets from the spot account into the spot account
 		/*
-		if err := s.transferIn(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, fixedpoint.Zero); err != nil {
-			log.WithError(err).Errorf("futures asset transfer in error")
-		}
+			if err := s.transferIn(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, fixedpoint.Zero); err != nil {
+				log.WithError(err).Errorf("futures asset transfer in error")
+			}
 		*/
 
 	case PositionClosing, PositionClosed:
 		// transfer all base assets from the futures account back to the spot account
 		/*
-		if err := s.transferOut(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, fixedpoint.Zero); err != nil {
-			log.WithError(err).Errorf("futures asset transfer out error")
-		}
+			if err := s.transferOut(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, fixedpoint.Zero); err != nil {
+				log.WithError(err).Errorf("futures asset transfer out error")
+			}
 		*/
 
 	}
@@ -403,7 +405,6 @@ func (s *Strategy) CrossRun(
 
 		log.Info("A new spot trade", trade, profit)
 
-
 		switch s.State.PositionState {
 		case PositionOpening:
 			if trade.Side != types.SideTypeBuy {
@@ -418,12 +419,12 @@ func (s *Strategy) CrossRun(
 			// if we have trade, try to query the balance and transfer the balance to the futures wallet account
 			// TODO: handle missing trades here. If the process crashed during the transfer, how to recover?
 			/*
-			if err := backoff.RetryGeneral(ctx, func() error {
-				return s.transferIn(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, trade.Quantity)
-			}); err != nil {
-				log.WithError(err).Errorf("spot-to-futures transfer in retry failed")
-				return
-			}
+				if err := backoff.RetryGeneral(ctx, func() error {
+					return s.transferIn(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, trade.Quantity)
+				}); err != nil {
+					log.WithError(err).Errorf("spot-to-futures transfer in retry failed")
+					return
+				}
 			*/
 
 		case PositionClosing:
@@ -443,19 +444,18 @@ func (s *Strategy) CrossRun(
 
 		log.Info("A future new trade", trade, profit)
 
-
 		switch s.getPositionState() {
 		case PositionClosing:
 			// de-leverage and get the collateral base quantity for transfer
 			/*
-			quantity := trade.Quantity.Div(s.Leverage)
+				quantity := trade.Quantity.Div(s.Leverage)
 
-			if err := backoff.RetryGeneral(ctx, func() error {
-				return s.transferOut(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, quantity)
-			}); err != nil {
-				log.WithError(err).Errorf("spot-to-futures transfer in retry failed")
-				return
-			}
+				if err := backoff.RetryGeneral(ctx, func() error {
+					return s.transferOut(ctx, s.binanceSpot, s.spotMarket.BaseCurrency, quantity)
+				}); err != nil {
+					log.WithError(err).Errorf("spot-to-futures transfer in retry failed")
+					return
+				}
 			*/
 
 		}
@@ -646,6 +646,9 @@ func (s *Strategy) queryAndDetectPremiumIndex(ctx context.Context, binanceFuture
 }
 
 func (s *Strategy) syncSpotAccount(ctx context.Context) {
+	if !s.checkSpread(ctx) {
+		return
+	}
 	switch s.getPositionState() {
 	case PositionOpening:
 		s.increaseSpotPosition(ctx)
@@ -661,6 +664,27 @@ func (s *Strategy) syncFuturesAccount(ctx context.Context) {
 	case PositionClosing:
 		s.reduceFuturesPosition(ctx)
 	}
+}
+
+func (s *Strategy) checkSpread(ctx context.Context) bool {
+
+	futuresTicker, err := s.futuresSession.Exchange.QueryTicker(ctx, s.Symbol)
+	if err != nil {
+		log.WithError(err).Errorf("can not query ticker")
+		return false
+	}
+	spotTicker, err := s.spotSession.Exchange.QueryTicker(ctx, s.Symbol)
+	if err != nil {
+		log.WithError(err).Errorf("can not query ticker")
+		return false
+	}
+
+	spread := futuresTicker.Last.Sub(spotTicker.Last).Abs()
+
+	if spread.Div(spotTicker.Last).Abs().Compare(s.Spread) > 0 {
+		return false
+	}
+	return true
 }
 
 func (s *Strategy) reduceFuturesPosition(ctx context.Context) {
@@ -793,9 +817,9 @@ func (s *Strategy) syncFuturesPosition(ctx context.Context) {
 
 	// max futures base position (without negative sign)
 	/*
-	maxFuturesBasePosition := fixedpoint.Min(
-		spotBase.Mul(s.Leverage),
-		s.State.TotalBaseTransfer.Mul(s.Leverage))
+		maxFuturesBasePosition := fixedpoint.Min(
+			spotBase.Mul(s.Leverage),
+			s.State.TotalBaseTransfer.Mul(s.Leverage))
 	*/
 	maxFuturesBasePosition := spotBase
 
@@ -806,18 +830,18 @@ func (s *Strategy) syncFuturesPosition(ctx context.Context) {
 	// if - futures position < max futures position, increase it
 	// posDiff := futuresBase.Abs().Sub(maxFuturesBasePosition)
 	/*
-	if futuresBase.Abs().Compare(maxFuturesBasePosition) >= 0 {
-		s.setPositionState(PositionReady)
+		if futuresBase.Abs().Compare(maxFuturesBasePosition) >= 0 {
+			s.setPositionState(PositionReady)
 
-		bbgo.Notify("Position Ready")
-		bbgo.Notify("SpotPosition", s.SpotPosition)
-		bbgo.Notify("FuturesPosition", s.FuturesPosition)
-		bbgo.Notify("NeutralPosition", s.NeutralPosition)
+			bbgo.Notify("Position Ready")
+			bbgo.Notify("SpotPosition", s.SpotPosition)
+			bbgo.Notify("FuturesPosition", s.FuturesPosition)
+			bbgo.Notify("NeutralPosition", s.NeutralPosition)
 
-		// DEBUG CODE - triggering closing position automatically
-		// s.startClosingPosition()
-		return
-	}
+			// DEBUG CODE - triggering closing position automatically
+			// s.startClosingPosition()
+			return
+		}
 	*/
 
 	orderPrice := ticker.Sell
@@ -840,9 +864,9 @@ func (s *Strategy) syncFuturesPosition(ctx context.Context) {
 	}
 
 	submitOrder := types.SubmitOrder{
-		Symbol:   s.Symbol,
-		Side:     types.SideTypeSell,
-		Type:     types.OrderTypeLimitMaker,
+		Symbol: s.Symbol,
+		Side:   types.SideTypeSell,
+		Type:   types.OrderTypeLimitMaker,
 		//Type:     types.OrderTypeLimit,
 		Quantity: orderQuantity,
 		Price:    orderPrice,
@@ -879,7 +903,6 @@ func (s *Strategy) syncSpotPosition(ctx context.Context) {
 	if spotBase.Sign() < 0 {
 		return
 	}
-	log.Info("dddd")
 
 	log.Infof("syncSpotPosition: spot/futures positions: %s (spot) <=> %s (futures)", spotBase.String(), futuresBase.String())
 
