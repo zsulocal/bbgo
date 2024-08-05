@@ -49,7 +49,7 @@ func (s *Strategy) checkPriceChange(symbol string) {
 	priceChange := ((currentPrice - initialPrice) / initialPrice) * 100
 
 	if priceChange > 30 {
-		msg := fmt.Sprintf("Price of %s has increased by more than 30%% in the past 24 hours. Current price: %.2f", symbol, currentPrice)
+		msg := fmt.Sprintf("Price of %s has increased by more than 30%% in the past 24 hours. Current price: %.2f", symbol, currentPrice.Float64())
 		bbgo.Notify(msg)
 	}
 }

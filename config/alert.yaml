@@ -1,0 +1,13 @@
+notifications:
+  telegram:
+    botToken: "7014359077:AAE1GwQl96Bbv9pXS-VmGUrKJvYy9YYkrHU"
+sessions:
+  binance:
+    exchange: binance
+exchangeStrategies:
+- on: binance
+  short:
+    symbol: 
+      - ETHUSDT
+      - BTCUSDT
+    interval: 5m
