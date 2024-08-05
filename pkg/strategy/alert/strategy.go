@@ -27,8 +27,8 @@ func init() {
 	bbgo.RegisterStrategy(ID, &Strategy{})
 }
 
-func (s *Strategy) InstanceID() string {
-	return fmt.Sprintf("%s-%s", ID, s.Interval.String())
+func (s *Strategy) ID() string {
+	return ID
 }
 
 func (s *Strategy) Subscribe(ctx context.Context, session *bbgo.ExchangeSession) {
