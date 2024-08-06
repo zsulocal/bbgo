@@ -42,13 +42,14 @@ func (s *Strategy) Subscribe(ctx context.Context, session *bbgo.ExchangeSession)
 
 func (s *Strategy) checkPriceChange(symbol string) {
 	prices := s.Prices[symbol]
-	if len(prices) < 288 {
+	if len(prices) < 20 {
 		return
 	}
 
 	initialPrice := prices[0].Close
 	currentPrice := prices[len(prices)-1].Close
 	priceChange := ((currentPrice - initialPrice) / initialPrice)
+	log.Info("price change %.2f %.2f %.4f", initialPrice, currentPrice, priceChange)
 
 	if priceChange > s.Change {
 		msg := fmt.Sprintf("Price of %s has increased by more than 30%% in the past 24 hours. Current price: %.2f", symbol, currentPrice.Float64())
@@ -75,7 +76,7 @@ func (s *Strategy) Run(ctx context.Context, _ bbgo.OrderExecutor, session *bbgo.
 	session.MarketDataStream.OnKLineClosed(func(kline types.KLine) {
 		log.Infof("catchUp mode is enabled, updating grid orders...")
 		s.Prices[kline.Symbol] = append(s.Prices[kline.Symbol], kline)
-		if len(s.Prices[kline.Symbol]) > 288 {
+		if len(s.Prices[kline.Symbol]) > 20 {
 			s.Prices[kline.Symbol] = s.Prices[kline.Symbol][1:]
 		}
 		log.Printf("%s now: %.5f %.5f", kline.Symbol, kline.Close.Float64(), s.Prices[kline.Symbol][0].Open.Float64())
