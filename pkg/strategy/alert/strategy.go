@@ -20,6 +20,7 @@ type Strategy struct {
 	Interval types.Interval `json:"interval"`
 	Prices   map[string][]types.KLine
 	Change   fixedpoint.Value `json:"change"`
+	Notified map[string]time.Time
 }
 
 func init() {
@@ -46,6 +47,12 @@ func (s *Strategy) checkPriceChange(symbol string) {
 		return
 	}
 
+	if last, ok := s.Notified[symbol]; ok {
+		if last.Add(time.Minute * 30).After(time.Now()) {
+			return
+		}
+	}
+
 	initialPrice := prices[0].Close
 	currentPrice := prices[len(prices)-1].Close
 	priceChange := ((currentPrice.Float64() - initialPrice.Float64()) / initialPrice.Float64())
@@ -54,6 +61,7 @@ func (s *Strategy) checkPriceChange(symbol string) {
 	if priceChange > s.Change.Float64() {
 		msg := fmt.Sprintf("Price of %s has increased by more than 30%% in the past 24 hours. Current price: %.2f", symbol, currentPrice.Float64())
 		bbgo.Notify(msg)
+		s.Notified[symbol] = time.Now()
 	}
 }
 func (s *Strategy) fetchHistoricalData(ctx context.Context, symbol string, session *bbgo.ExchangeSession) {
@@ -70,6 +78,7 @@ func (s *Strategy) fetchHistoricalData(ctx context.Context, symbol string, sessi
 
 func (s *Strategy) Run(ctx context.Context, _ bbgo.OrderExecutor, session *bbgo.ExchangeSession) error {
 	s.Prices = make(map[string][]types.KLine)
+	s.Notified = make(map[string]time.Time)
 
 	s.Subscribe(ctx, session)
 
