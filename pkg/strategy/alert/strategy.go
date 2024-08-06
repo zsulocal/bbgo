@@ -33,14 +33,14 @@ func (s *Strategy) ID() string {
 
 func (s *Strategy) Subscribe(ctx context.Context, session *bbgo.ExchangeSession) {
 	for _, symbol := range s.Symbols {
-		session.Subscribe(types.KLineChannel, symbol, types.SubscribeOptions{Interval: "5m"})
+		session.Subscribe(types.KLineChannel, symbol, types.SubscribeOptions{Interval: s.Interval})
 		s.fetchHistoricalData(ctx, symbol, session)
 	}
 }
 
 func (s *Strategy) checkPriceChange(symbol string) {
 	prices := s.Prices[symbol]
-	if len(prices) < 24 {
+	if len(prices) < 288 {
 		return
 	}
 
@@ -57,7 +57,7 @@ func (s *Strategy) fetchHistoricalData(ctx context.Context, symbol string, sessi
 	endTime := time.Now()
 	startTime := endTime.Add(-24 * time.Hour)
 
-	kLines, err := session.Exchange.QueryKLines(ctx, symbol, types.Interval5m, types.KLineQueryOptions{StartTime: &startTime, EndTime: &endTime})
+	kLines, err := session.Exchange.QueryKLines(ctx, symbol, s.Interval, types.KLineQueryOptions{StartTime: &startTime, EndTime: &endTime})
 	if err != nil {
 		log.Printf("failed to fetch historical data for %s: %v", symbol, err)
 		return
@@ -76,6 +76,7 @@ func (s *Strategy) Run(ctx context.Context, _ bbgo.OrderExecutor, session *bbgo.
 		if len(s.Prices[kline.Symbol]) > 288 {
 			s.Prices[kline.Symbol] = s.Prices[kline.Symbol][1:]
 		}
+		log.Println(s.Prices[kline.Symbol])
 		log.Printf("%s now: %.5f %.5f", kline.Symbol, kline.Close.Float64(), s.Prices[kline.Symbol][0].Open.Float64())
 		s.checkPriceChange(kline.Symbol)
 	})
