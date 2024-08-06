@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/c9s/bbgo/pkg/bbgo"
+	"github.com/c9s/bbgo/pkg/fixedpoint"
 	"github.com/c9s/bbgo/pkg/types"
 	"github.com/sirupsen/logrus"
 )
@@ -18,6 +19,7 @@ type Strategy struct {
 	Symbols  []string       `json:"symbol"`
 	Interval types.Interval `json:"interval"`
 	Prices   map[string][]types.KLine
+	Change   fixedpoint.Value `json:"change"`
 }
 
 func init() {
@@ -46,9 +48,9 @@ func (s *Strategy) checkPriceChange(symbol string) {
 
 	initialPrice := prices[0].Close
 	currentPrice := prices[len(prices)-1].Close
-	priceChange := ((currentPrice - initialPrice) / initialPrice) * 100
+	priceChange := ((currentPrice - initialPrice) / initialPrice)
 
-	if priceChange > 30 {
+	if priceChange > s.Change {
 		msg := fmt.Sprintf("Price of %s has increased by more than 30%% in the past 24 hours. Current price: %.2f", symbol, currentPrice.Float64())
 		bbgo.Notify(msg)
 	}
