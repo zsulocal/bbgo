@@ -62,7 +62,7 @@ func (s *Strategy) fetchHistoricalData(ctx context.Context, symbol string, sessi
 		log.Printf("failed to fetch historical data for %s: %v", symbol, err)
 		return
 	}
-	fmt.Println(kLines)
+	s.Prices[symbol] = kLines
 }
 
 func (s *Strategy) Run(ctx context.Context, _ bbgo.OrderExecutor, session *bbgo.ExchangeSession) error {
@@ -76,7 +76,6 @@ func (s *Strategy) Run(ctx context.Context, _ bbgo.OrderExecutor, session *bbgo.
 		if len(s.Prices[kline.Symbol]) > 288 {
 			s.Prices[kline.Symbol] = s.Prices[kline.Symbol][1:]
 		}
-		log.Println(s.Prices[kline.Symbol])
 		log.Printf("%s now: %.5f %.5f", kline.Symbol, kline.Close.Float64(), s.Prices[kline.Symbol][0].Open.Float64())
 		s.checkPriceChange(kline.Symbol)
 	})
