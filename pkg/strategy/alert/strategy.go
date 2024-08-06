@@ -76,6 +76,7 @@ func (s *Strategy) Run(ctx context.Context, _ bbgo.OrderExecutor, session *bbgo.
 		if len(s.Prices[kline.Symbol]) > 288 {
 			s.Prices[kline.Symbol] = s.Prices[kline.Symbol][1:]
 		}
+		log.Printf("%s now: %.5f %.5f", kline.Symbol, kline.Close.Float64(), s.Prices[kline.Symbol][0].Open.Float64())
 		s.checkPriceChange(kline.Symbol)
 	})
 	return nil
