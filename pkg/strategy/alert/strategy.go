@@ -48,8 +48,8 @@ func (s *Strategy) checkPriceChange(symbol string) {
 
 	initialPrice := prices[0].Close
 	currentPrice := prices[len(prices)-1].Close
-	priceChange := ((currentPrice - initialPrice) / initialPrice)
-	log.Info("price change %.2f %.2f %.4f", initialPrice, currentPrice, priceChange)
+	priceChange := ((currentPrice - initialPrice) / initialPrice) * 100
+	log.Infof("price change %.2f %.2f %.4f", initialPrice, currentPrice, priceChange)
 
 	if priceChange > s.Change {
 		msg := fmt.Sprintf("Price of %s has increased by more than 30%% in the past 24 hours. Current price: %.2f", symbol, currentPrice.Float64())
