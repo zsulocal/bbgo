@@ -67,6 +67,12 @@ type Strategy struct {
 
 	LowerPrice fixedpoint.Value `json:"lowerPrice" yaml:"lowerPrice"`
 
+	DUpperPrice fixedpoint.Value `json:"dUpperPrice" yaml:"dUpperPrice"`
+
+	DLowerPrice fixedpoint.Value `json:"dLowerPrice" yaml:"dLowerPrice"`
+
+	MiddlePrice fixedpoint.Value `json:"middlePrice" yaml:"middlePrice"`
+
 	// Quantity is the quantity you want to submit for each order.
 	Quantity fixedpoint.Value `json:"quantity,omitempty"`
 
@@ -175,6 +181,8 @@ func (s *Strategy) generateGridSellOrders(session *bbgo.ExchangeSession) ([]type
 		startPrice.String(),
 		s.UpperPrice.String(),
 		gridSpread.String())
+
+	s.MiddlePrice = startPrice
 
 	var orders []types.SubmitOrder
 	for price := startPrice; price.Compare(s.UpperPrice) <= 0; price = price.Add(gridSpread) {
@@ -627,9 +635,18 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 	if s.CatchUp {
 		session.MarketDataStream.OnKLineClosed(func(kline types.KLine) {
 			log.Infof("catchUp mode is enabled, updating grid orders...")
-			priceRange := s.ProfitSpread.Mul(fixedpoint.Value(s.GridNum / 2))
-			s.UpperPrice = kline.Close.Add(priceRange)
-			s.LowerPrice = kline.Close.Sub(priceRange)
+			priceRange := s.ProfitSpread.Mul(fixedpoint.Value(s.GridNum / 2 * 10000))
+
+			if kline.Close.Sub(s.MinPrice).Abs().Compare(s.ProfitSpread) > 0 {
+				_upper := kline.Close.Add(priceRange)
+				_lower := kline.Close.Sub(priceRange)
+				if _upper.Compare(s.DUpperPrice) < 0 {
+					s.UpperPrice = _upper
+				}
+				if _lower.Compare(s.DLowerPrice) > 0 {
+					s.LowerPrice = _lower
+				}
+			}
 
 			// update grid
 			s.placeGridOrders(orderExecutor, session)
