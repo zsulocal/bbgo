@@ -635,7 +635,7 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 	if s.CatchUp {
 		session.MarketDataStream.OnKLineClosed(func(kline types.KLine) {
 			log.Infof("catchUp mode is enabled, updating grid orders...")
-			priceRange := s.ProfitSpread.Mul(fixedpoint.Value(s.GridNum / 2 * 10000))
+			priceRange := s.ProfitSpread.Mul(fixedpoint.Value(s.GridNum / 2 * 100000000))
 
 			if kline.Close.Sub(s.MinPrice).Abs().Compare(s.ProfitSpread) > 0 {
 				_upper := kline.Close.Add(priceRange)
