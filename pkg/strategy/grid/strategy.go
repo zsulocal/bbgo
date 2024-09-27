@@ -647,7 +647,13 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 				if _lower.Compare(s.DLowerPrice) > 0 {
 					s.LowerPrice = _lower
 				}
-				submitOrders := s.activeOrders.Backup()
+				_submitOrders := s.activeOrders.Backup()
+				submitOrders := make([]types.SubmitOrder, 0)
+				for _, order := range _submitOrders {
+					if order.Price.Compare(s.UpperPrice) > 0 || order.Price.Compare(s.LowerPrice) < 0 {
+						submitOrders = append(submitOrders, order)
+					}
+				}
 				s.State.Orders = submitOrders
 				bbgo.Sync(ctx, s)
 
