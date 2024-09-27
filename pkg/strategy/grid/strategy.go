@@ -647,6 +647,15 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 				if _lower.Compare(s.DLowerPrice) > 0 {
 					s.LowerPrice = _lower
 				}
+				submitOrders := s.activeOrders.Backup()
+				s.State.Orders = submitOrders
+				bbgo.Sync(ctx, s)
+
+				// now we can cancel the open orders
+				log.Infof("canceling active orders...")
+				if err := session.Exchange.CancelOrders(context.Background(), s.activeOrders.Orders()...); err != nil {
+					log.WithError(err).Errorf("cancel order error")
+				}
 				log.Infof("catchUp mode is enabled, updating grid orders... %v %v", s.LowerPrice, s.UpperPrice)
 			}
 
