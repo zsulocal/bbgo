@@ -637,7 +637,7 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 			log.Infof("catchUp mode is enabled, updating grid orders...")
 			priceRange := s.ProfitSpread.Mul(fixedpoint.Value(s.GridNum / 2 * 100000000))
 
-			if kline.Close.Sub(s.MinPrice).Abs().Compare(s.ProfitSpread) > 0 {
+			if kline.Close.Sub(s.MiddlePrice).Abs().Compare(s.ProfitSpread) > 0 {
 				_upper := kline.Close.Add(priceRange)
 				_lower := kline.Close.Sub(priceRange)
 				if _upper.Compare(s.DUpperPrice) < 0 {
