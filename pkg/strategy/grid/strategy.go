@@ -646,6 +646,7 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 				if _lower.Compare(s.DLowerPrice) > 0 {
 					s.LowerPrice = _lower
 				}
+				log.Infof("catchUp mode is enabled, updating grid orders... %v %v", s.LowerPrice, s.UpperPrice)
 			}
 
 			// update grid
