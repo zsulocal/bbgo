@@ -224,27 +224,27 @@ docker-push:
 	docker push yoanlin/bbgo
 	bash -c "[[ -n $(DOCKER_TAG) ]] && docker push yoanlin/bbgo:$(DOCKER_TAG)"
 
-apps/frontend/node_modules:
-	cd apps/frontend && yarn install
+#apps/frontend/node_modules:
+#	cd apps/frontend && yarn install
 
-apps/frontend/out/index.html: apps/frontend/node_modules
+#apps/frontend/out/index.html: apps/frontend/node_modules
 	cd apps/frontend && yarn export
 
-pkg/server/assets.go: apps/frontend/out/index.html
-	go run ./utils/embed -package server -tag web -output $@ $(FRONTEND_EXPORT_DIR)
+#pkg/server/assets.go: apps/frontend/out/index.html
+#	go run ./utils/embed -package server -tag web -output $@ $(FRONTEND_EXPORT_DIR)
 
-$(BACKTEST_REPORT_APP_DIR)/node_modules:
-	cd $(BACKTEST_REPORT_APP_DIR) && yarn install
+#$(BACKTEST_REPORT_APP_DIR)/node_modules:
+#	cd $(BACKTEST_REPORT_APP_DIR) && yarn install
 
 $(BACKTEST_REPORT_APP_DIR)/out/index.html: .FORCE $(BACKTEST_REPORT_APP_DIR)/node_modules
 	cd $(BACKTEST_REPORT_APP_DIR) && yarn build && yarn export
 
-pkg/backtest/assets.go: $(BACKTEST_REPORT_APP_DIR)/out/index.html
-	go run ./utils/embed -package backtest -tag web -output $@ $(BACKTEST_REPORT_EXPORT_DIR)
+#pkg/backtest/assets.go: $(BACKTEST_REPORT_APP_DIR)/out/index.html
+#	go run ./utils/embed -package backtest -tag web -output $@ $(BACKTEST_REPORT_EXPORT_DIR)
 
-embed: pkg/server/assets.go pkg/backtest/assets.go
+#embed: pkg/server/assets.go pkg/backtest/assets.go
 
-static: apps/frontend/out/index.html pkg/server/assets.go pkg/backtest/assets.go
+#static: apps/frontend/out/index.html pkg/server/assets.go pkg/backtest/assets.go
 
 PROTOS := \
 	$(wildcard pkg/pb/*.proto)

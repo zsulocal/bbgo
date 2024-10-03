@@ -637,7 +637,7 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 			log.Infof("catchUp mode is enabled, updating grid orders...")
 			priceRange := s.ProfitSpread.Mul(fixedpoint.Value(s.GridNum / 2 * 100000000))
 
-			log.Infof("catch mode is enabled, %v %v ", kline.Close, s.MiddlePrice)
+			log.Infof("catchUp mode is enabled, %v %v ", kline.Close, s.MiddlePrice)
 			if kline.Close.Sub(s.MiddlePrice).Abs().Compare(s.ProfitSpread) > 0 {
 				_upper := kline.Close.Add(priceRange)
 				_lower := kline.Close.Sub(priceRange)
@@ -658,12 +658,12 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 				bbgo.Sync(ctx, s)
 
 				// now we can cancel the open orders
-				log.Infof("canceling active orders...")
 				if err := session.Exchange.CancelOrders(context.Background(), s.activeOrders.Orders()...); err != nil {
 					log.WithError(err).Errorf("cancel order error")
 				}
-				log.Infof("catchUp mode is enabled, updating grid orders... %v %v", s.LowerPrice, s.UpperPrice)
+				log.Infof("catchUp mode is enabled, new updating grid orders... %v %v", s.LowerPrice, s.UpperPrice)
 			}
+			log.Infof("catchUp mode is enabled, updating grid orders... %v %v", s.LowerPrice, s.UpperPrice)
 
 			// update grid
 			s.placeGridOrders(orderExecutor, session)
