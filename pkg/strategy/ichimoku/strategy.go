@@ -3,7 +3,9 @@ package ichimoku
 import (
 	"context"
 	"fmt"
+
 	"github.com/c9s/bbgo/pkg/bbgo"
+	"github.com/c9s/bbgo/pkg/fixedpoint"
 	"github.com/c9s/bbgo/pkg/types"
 	"github.com/sirupsen/logrus"
 )
@@ -15,14 +17,19 @@ var log = logrus.WithField("strategy", ID)
 type Strategy struct {
 	//	*common.Strategy
 	*bbgo.Notifiability
-	Environment       *bbgo.Environment
-	Market            types.Market
-	Symbol            string         `json:"symbol"`
-	Interval          types.Interval `json:"interval"`
-	ConversionPeriod  int
-	BasePeriod        int
-	LaggingSpanPeriod int
-	Displacement      int
+	session       *bbgo.ExchangeSession
+	orderExecutor bbgo.OrderExecutor
+	Environment   *bbgo.Environment
+	Market        types.Market
+	Symbol        string `json:"symbol"`
+	Current       types.KLine
+	Interval      types.Interval `json:"interval"`
+	//UpperPrice fixedpoint.Value `json:"upperPrice" yaml:"upperPrice"`
+
+	ConversionPeriod  int `json:"conversion_period" yaml:"conversion_period"`
+	BasePeriod        int `json:"base_period" yaml:"base_period"`
+	LaggingSpanPeriod int `json:"lagging_span_period" yaml:"lagging_span_period"`
+	Displacement      int `json:"displacement" yaml:"displacement"`
 	klines            []types.KLine
 }
 
@@ -40,6 +47,7 @@ func (s *Strategy) InstanceID() string {
 
 func (s *Strategy) calculateIchimokuCloud() (tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan []float64) {
 	candles := s.klines
+	candles = append(candles, s.Current)
 	length := len(candles)
 	tenkanSen = make([]float64, length)
 	kijunSen = make([]float64, length)
@@ -48,6 +56,7 @@ func (s *Strategy) calculateIchimokuCloud() (tenkanSen, kijunSen, senkouSpanA, s
 	chikouSpan = make([]float64, length)
 
 	for i := range candles {
+
 		if i >= s.ConversionPeriod-1 {
 			tenkanSen[i] = (highestHigh(candles[i-s.ConversionPeriod+1:i+1]) + lowestLow(candles[i-s.ConversionPeriod+1:i+1])) / 2
 		}
@@ -71,6 +80,8 @@ func (s *Strategy) calculateIchimokuCloud() (tenkanSen, kijunSen, senkouSpanA, s
 func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, session *bbgo.ExchangeSession) error {
 	//s.Strategy.Initialize(ctx, s.Environment, session, s.Market, ID, s.InstanceID())
 	log.Info("start")
+	s.session = session
+	s.orderExecutor = orderExecutor
 
 	kLineStore, _ := session.MarketDataStore(s.Symbol)
 
@@ -78,20 +89,78 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 		s.klines = (*klines)[0:]
 	}
 
-	fmt.Println(s.klines)
+	last := s.klines[len(s.klines)-1]
+	s.Current = types.KLine{
+		Open:  last.Close,
+		High:  last.Close,
+		Low:   last.Close,
+		Close: last.Close,
+	}
+
+	minTradeAmount, _ := fixedpoint.NewFromString("10")
 
 	session.MarketDataStream.OnKLineClosed(func(k types.KLine) {
+		if k.Interval.String() != "1h" && k.Interval.String() != "4h" {
+			return
+		}
+		if k.Interval == s.Interval {
+			s.klines = append(s.klines, k)
+			s.Current = types.KLine{
+				Open:      k.Close,
+				High:      k.Close,
+				Low:       k.Close,
+				Close:     k.Close,
+				StartTime: k.StartTime,
+			}
+			return
+		} else {
+			if s.Current.High < k.Close {
+				s.Current.High = k.Close
+			}
 
-		tenkanSen, kijunSen, senkouSpanA, senkouSpanB, chikouSpan := s.calculateIchimokuCloud()
+			if s.Current.Low > k.Close {
+				s.Current.Low = k.Close
+			}
+
+			s.Current.Close = k.Close
+		}
+		tenkanSen, kijunSen, senkouSpanA, senkouSpanB, _ := s.calculateIchimokuCloud()
 		price := k.Close.Float64()
 		cloudTop := max(senkouSpanA[len(senkouSpanA)-s.Displacement], senkouSpanB[len(senkouSpanB)-s.Displacement])
 		cloudBottom := min(senkouSpanA[len(senkouSpanA)-s.Displacement], senkouSpanB[len(senkouSpanB)-s.Displacement])
+		//log.Debugf("%v ichimoku cloud price %v cloudtop %v cloudBottom%v, conversion line %v baseline  %v\n", k.StartTime, price, cloudTop, cloudBottom, tenkanSen[len(tenkanSen)-1], kijunSen[len(kijunSen)-1])
 
-		if tenkanSen[len(tenkanSen)-1] > kijunSen[len(kijunSen)-1] && price > cloudTop && chikouSpan[len(chikouSpan)-s.Displacement] > price {
-			log.Info("buy")
-		} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom && chikouSpan[len(chikouSpan)-s.Displacement] < price {
-			log.Info("sell")
+		/*
+		  tenkanSen = convertion
+		  kijunSen = base
+		  cloudtop = leading SpanA
+		  cloudBottom =  leading SpanB
+
+		*/
+		//if tenkanSen[len(tenkanSen)-1] > kijunSen[len(kijunSen)-1] && price > cloudTop && chikouSpan[len(chikouSpan)-s.Displacement] > price {
+		if tenkanSen[len(tenkanSen)-1] > kijunSen[len(kijunSen)-1] && price > cloudTop {
+			//log.Infof("buy signal")
+			balance, _ := s.session.Account.Balance("USDT")
+			if balance.Available.Compare(0) > 0 && balance.Available.Compare(minTradeAmount) > 0 {
+				log.Infof("%v ichimoku cloud price %v cloudtop %v cloudBottom%v, conversion line %v baseline  %v\n", k.StartTime, price, cloudTop, cloudBottom, tenkanSen[len(tenkanSen)-1], kijunSen[len(kijunSen)-1])
+				qty := balance.Available.Div(k.Close)
+				s.placeOrder(ctx, types.SideTypeBuy, qty, k.Symbol)
+				//log.Infof("buy BTC with %v USDT in %v at %v", balance.Available, k.Close, k.EndTime)
+				s.Notify("buy BTC with %v USDT in %v at %v", balance.Available, k.Close, k.StartTime.Time())
+			}
+			//} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom && chikouSpan[len(chikouSpan)-s.Displacement] < price {
+		} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom {
+			//log.Infof("sell signal")
+			balance, _ := s.session.Account.Balance("BTC")
+			amount := k.Close.Mul(balance.Available)
+			if balance.Available.Compare(0) > 0 && amount.Compare(minTradeAmount) > 0 {
+				log.Infof("%v ichimoku cloud price %v cloudtop %v cloudBottom%v, conversion line %v baseline  %v\n", k.StartTime, price, cloudTop, cloudBottom, tenkanSen[len(tenkanSen)-1], kijunSen[len(kijunSen)-1])
+				s.placeOrder(ctx, types.SideTypeSell, balance.Available, k.Symbol)
+				//log.Infof("sell USDT with %v BTC in %v at %v", balance.Available, k.Close, k.EndTime)
+				s.Notify("sell USDT with %v BTC in %v at %v", balance.Available, k.Close, k.StartTime.Time())
+			}
 		}
+
 	})
 	return nil
 }
@@ -132,4 +201,21 @@ func min(a, b float64) float64 {
 
 func init() {
 	bbgo.RegisterStrategy(ID, &Strategy{})
+}
+func (s *Strategy) placeOrder(
+	ctx context.Context, side types.SideType, quantity fixedpoint.Value, symbol string,
+) error {
+	market, _ := s.session.Market(symbol)
+	_, err := s.orderExecutor.SubmitOrders(ctx, types.SubmitOrder{
+		Symbol:   symbol,
+		Market:   market,
+		Side:     side,
+		Type:     types.OrderTypeMarket,
+		Quantity: quantity,
+		Tag:      "ichimoku_cloud",
+	})
+	if err != nil {
+		log.WithError(err).Errorf("can not place market order")
+	}
+	return err
 }
