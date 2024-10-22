@@ -24,6 +24,8 @@ type Strategy struct {
 	Symbol        string `json:"symbol"`
 	Current       types.KLine
 	Interval      types.Interval `json:"interval"`
+	AutoTrade     bool           `json:"autoTrade"`
+	PreInterval   types.Interval `json:"preInterval"`
 	//UpperPrice fixedpoint.Value `json:"upperPrice" yaml:"upperPrice"`
 
 	ConversionPeriod  int `json:"conversion_period" yaml:"conversion_period"`
@@ -35,6 +37,7 @@ type Strategy struct {
 
 func (s *Strategy) Subscribe(session *bbgo.ExchangeSession) {
 	session.Subscribe(types.KLineChannel, s.Symbol, types.SubscribeOptions{Interval: s.Interval})
+	session.Subscribe(types.KLineChannel, s.Symbol, types.SubscribeOptions{Interval: s.PreInterval})
 }
 
 func (s *Strategy) ID() string {
@@ -100,7 +103,7 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 	minTradeAmount, _ := fixedpoint.NewFromString("10")
 
 	session.MarketDataStream.OnKLineClosed(func(k types.KLine) {
-		if k.Interval.String() != "1h" && k.Interval.String() != "4h" {
+		if k.Interval.String() != s.Interval.String() && k.Interval.String() != s.PreInterval.String() {
 			return
 		}
 		if k.Interval == s.Interval {
@@ -139,17 +142,20 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 		*/
 		//if tenkanSen[len(tenkanSen)-1] > kijunSen[len(kijunSen)-1] && price > cloudTop && chikouSpan[len(chikouSpan)-s.Displacement] > price {
 		if tenkanSen[len(tenkanSen)-1] > kijunSen[len(kijunSen)-1] && price > cloudTop {
+			//if price > cloudTop {
 			//log.Infof("buy signal")
 			balance, _ := s.session.Account.Balance("USDT")
-			if balance.Available.Compare(0) > 0 && balance.Available.Compare(minTradeAmount) > 0 {
+			if balance.Available.Compare(0) > 0 && balance.Available.Compare(minTradeAmount) > 0 && s.AutoTrade {
 				log.Infof("%v ichimoku cloud price %v cloudtop %v cloudBottom%v, conversion line %v baseline  %v\n", k.StartTime, price, cloudTop, cloudBottom, tenkanSen[len(tenkanSen)-1], kijunSen[len(kijunSen)-1])
 				qty := balance.Available.Div(k.Close)
 				s.placeOrder(ctx, types.SideTypeBuy, qty, k.Symbol)
 				//log.Infof("buy BTC with %v USDT in %v at %v", balance.Available, k.Close, k.EndTime)
 				s.Notify("buy BTC with %v USDT in %v at %v", balance.Available, k.Close, k.StartTime.Time())
 			}
+			s.Notify("Buy %v signal at %v", k.Symbol, k.Close)
 			//} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom && chikouSpan[len(chikouSpan)-s.Displacement] < price {
-		} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom {
+			//} else if price < cloudTop {
+		} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom && s.AutoTrade {
 			//log.Infof("sell signal")
 			balance, _ := s.session.Account.Balance("BTC")
 			amount := k.Close.Mul(balance.Available)
@@ -159,6 +165,7 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 				//log.Infof("sell USDT with %v BTC in %v at %v", balance.Available, k.Close, k.EndTime)
 				s.Notify("sell USDT with %v BTC in %v at %v", balance.Available, k.Close, k.StartTime.Time())
 			}
+			s.Notify("Sell %v signal at %v", k.Symbol, k.Close)
 		}
 
 	})
