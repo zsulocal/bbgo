@@ -155,11 +155,11 @@ func (s *Strategy) Run(ctx context.Context, orderExecutor bbgo.OrderExecutor, se
 			s.Notify("Buy %v signal at %v", k.Symbol, k.Close)
 			//} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom && chikouSpan[len(chikouSpan)-s.Displacement] < price {
 			//} else if price < cloudTop {
-		} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom && s.AutoTrade {
+		} else if tenkanSen[len(tenkanSen)-1] < kijunSen[len(kijunSen)-1] && price < cloudBottom {
 			//log.Infof("sell signal")
 			balance, _ := s.session.Account.Balance("BTC")
 			amount := k.Close.Mul(balance.Available)
-			if balance.Available.Compare(0) > 0 && amount.Compare(minTradeAmount) > 0 {
+			if balance.Available.Compare(0) > 0 && amount.Compare(minTradeAmount) > 0 && s.AutoTrade {
 				log.Infof("%v ichimoku cloud price %v cloudtop %v cloudBottom%v, conversion line %v baseline  %v\n", k.StartTime, price, cloudTop, cloudBottom, tenkanSen[len(tenkanSen)-1], kijunSen[len(kijunSen)-1])
 				s.placeOrder(ctx, types.SideTypeSell, balance.Available, k.Symbol)
 				//log.Infof("sell USDT with %v BTC in %v at %v", balance.Available, k.Close, k.EndTime)
